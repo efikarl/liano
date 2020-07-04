@@ -4,4 +4,6 @@
 *_extdep
 __pycache__
 
-/Build/
+/Build
+/Conf
+/*.log

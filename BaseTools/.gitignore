@@ -5,6 +5,7 @@
 *.ilk
 *.exe
 *.pyc
+Source/C/BrotliCompress/brotli
 Source/C/VfrCompile/EfiVfrParser.cpp
 Source/C/VfrCompile/EfiVfrParser.h
 Source/C/VfrCompile/Pccts/antlr/antlr
