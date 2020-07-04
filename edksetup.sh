@@ -1,214 +1,177 @@
+#!/usr/bin/env bash
 #
-# Copyright (c) 2006 - 2016, Intel Corporation. All rights reserved.<BR>
-# Copyright (c) 2016, Linaro Ltd. All rights reserved.<BR>
-# SPDX-License-Identifier: BSD-2-Clause-Patent
+#  Copyright ©2020 efikarl, https://efikarl.com.
 #
-# In *inux environment, the build tools's source is required and need to be compiled
-# firstly, please reference https://github.com/tianocore/tianocore.github.io/wiki/SourceForge-to-Github-Quick-Start
-# to get how to setup build tool.
+#  This program is just made available under the terms and conditions of the
+#  MIT license: https://efikarl.com/mit-license.html.
 #
-# Setup the environment for unix-like systems running a bash-like shell.
-# This file must be "sourced" not merely executed. For example: ". edksetup.sh"
+#  THE PROGRAM IS DISTRIBUTED UNDER THE MIT LICENSE ON AN "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #
-# CYGWIN users: Your path and filename related environment variables should be
-# set up in the unix style.  This script will make the necessary conversions to
-# windows style.
-#
-# Please reference edk2 user manual for more detail descriptions at https://github.com/tianocore-docs/Docs/raw/master/User_Docs/EDK_II_UserManual_0_7.pdf
-#
-
-SCRIPTNAME="edksetup.sh"
-RECONFIG=FALSE
-
-function HelpMsg()
+#  A script to setup environment for EDKII.
+help_info()
 {
-  echo "Usage: $SCRIPTNAME [Options]"
-  echo
-  echo "The system environment variable, WORKSPACE, is always set to the current"
-  echo "working directory."
-  echo
-  echo "Options: "
-  echo "  --help, -h, -?        Print this help screen and exit."
-  echo
-  echo "  --reconfig            Overwrite the WORKSPACE/Conf/*.txt files with the"
-  echo "                        template files from the BaseTools/Conf directory."
-  echo
-  echo Please note: This script must be \'sourced\' so the environment can be changed.
-  echo ". $SCRIPTNAME"
-  echo "source $SCRIPTNAME"
+  echo '  ------------------------------------------------------------------------  '
+  echo '  usage:                                                                    '
+  echo '    edksetup [-w WORKSPACE] [-e EDK_TOOLS_PATH] [-p PYTHON_COMMAND]         '
+  echo '  option:                                                                   '
+  echo '    -w WORKSPACE      --Setup environment variable WORKSPACE for EDKII.     '
+  echo '    -t EDK_TOOLS_PATH --Setup environment variable EDK_TOOLS_PATH for EDKII.'
+  echo '    -p PYTHON_COMMAND --Setup environment variable PYTHON_COMMAND for EDKII.'
+  echo '  ------------------------------------------------------------------------  '
 }
 
-function SetWorkspace()
+env_path_rel_to_abs()
 {
-  #
-  # If WORKSPACE is already set, then we can return right now
-  #
-  export PYTHONHASHSEED=1
-  if [ -n "$WORKSPACE" ]
-  then
-    return 0
-  fi
-
-  if [ ! ${BASH_SOURCE[0]} -ef ./$SCRIPTNAME ] && [ -z "$PACKAGES_PATH" ]
-  then
-    echo Run this script from the base of your tree.  For example:
-    echo "  cd /Path/To/Edk/Root"
-    echo "  . $SCRIPTNAME"
-    return 1
-  fi
-
-  #
-  # Check for BaseTools/BuildEnv before dirtying the user's environment.
-  #
-  if [ ! -f BaseTools/BuildEnv ] && [ -z "$EDK_TOOLS_PATH" ]
-  then
-    echo BaseTools not found in your tree, and EDK_TOOLS_PATH is not set.
-    echo Please point EDK_TOOLS_PATH at the directory that contains
-    echo the EDK2 BuildEnv script.
-    return 1
-  fi
-
-  #
-  # Set $WORKSPACE
-  #
-  export WORKSPACE=$PWD
-  return 0
+  # as "readlink -f $path" under linux, macosx not support till 10.15.5
+  pushd . >/dev/null 2>&1 && {
+    cd $2 && export $1=$(pwd)
+  } && popd >/dev/null 2>&1
 }
 
-function SetupEnv()
+param_parse()
 {
-  if [ -n "$EDK_TOOLS_PATH" ]
-  then
-    . $EDK_TOOLS_PATH/BuildEnv
-  elif [ -f "$WORKSPACE/BaseTools/BuildEnv" ]
-  then
-    . $WORKSPACE/BaseTools/BuildEnv
-  elif [ -n "$PACKAGES_PATH" ]
-  then
-    PATH_LIST=$PACKAGES_PATH
-    PATH_LIST=${PATH_LIST//:/ }
-    for DIR in $PATH_LIST
-    do
-      if [ -f "$DIR/BaseTools/BuildEnv" ]
-      then
-        export EDK_TOOLS_PATH=$DIR/BaseTools
-        . $DIR/BaseTools/BuildEnv
-        break
-      fi
-    done
-  else
-    echo BaseTools not found in your tree, and EDK_TOOLS_PATH is not set.
-    echo Please check that WORKSPACE or PACKAGES_PATH is not set incorrectly
-    echo in your shell, or point EDK_TOOLS_PATH at the directory that contains
-    echo the EDK2 BuildEnv script.
-    return 1
-  fi
-}
-
-function SetupPython3()
-{
-  if [ $origin_version ];then
-    origin_version=
-  fi
-  for python in $(whereis python3)
+  while getopts "w:t:p:" arg
   do
-    python=$(echo $python | grep "[[:digit:]]$" || true)
-    python_version=${python##*python}
-    if [ -z "${python_version}" ] || (! command -v $python >/dev/null 2>&1);then
-      continue
-    fi
-    if [ -z $origin_version ];then
-      origin_version=$python_version
-      export PYTHON_COMMAND=$python
-      continue
-    fi
-      if [[ "$origin_version" < "$python_version" ]]; then
-      origin_version=$python_version
-      export PYTHON_COMMAND=$python
-    fi
+    case $arg in
+    w)
+      export WORKSPACE=$OPTARG
+      ;;
+    t)
+      export EDK_TOOLS_PATH=$OPTARG
+      ;;
+    p)
+      export PYTHON_COMMAND=$OPTARG
+      ;;
+    ?)
+      help_info && return 1
+      ;;
+    esac
   done
+
   return 0
 }
 
-function SetupPython()
+check_envar()
 {
-  if [ $PYTHON_COMMAND ] && [ -z $PYTHON3_ENABLE ];then
-    if ( command -v $PYTHON_COMMAND >/dev/null 2>&1 );then
-      return 0
-    else
-      echo $PYTHON_COMMAND Cannot be used to build or execute the python tools.
+  # WORKSPACE: check and try to set
+  # if not set
+  #   try to set via pwd of this script
+  if [[ ! -f $WORKSPACE/MdePkg/MdePkg.dsc ]] && [[ -f $(dirname ${BASH_SOURCE[0]})/MdePkg/MdePkg.dsc ]]
+  then
+    WORKSPACE=$(dirname ${BASH_SOURCE[0]})
+  fi
+  # WORKSPACE: check at last
+  if [[ ! -f $WORKSPACE/MdePkg/MdePkg.dsc ]]
+  then
+    echo "[ERR]:${BASH_SOURCE[0]}: Invalid \$WORKSPACE=$WORKSPACE!"
+    return 1
+  fi
+  env_path_rel_to_abs WORKSPACE $WORKSPACE
+
+  # EDK_TOOLS_PATH: check and try to set
+  # if not set
+  #   1. try to set via BASE_TOOLS_PATH
+  if [[ ! -f $EDK_TOOLS_PATH/Conf/target.template ]] && [[ -f $BASE_TOOLS_PATH/Conf/target.template ]]
+  then
+    EDK_TOOLS_PATH=$BASE_TOOLS_PATH
+  fi
+  #   2. try to set via $WORKSPACE
+  if [[ ! -f $EDK_TOOLS_PATH/Conf/target.template ]] && [[ -f $WORKSPACE/BaseTools/Conf/target.template ]]
+  then
+    EDK_TOOLS_PATH=$WORKSPACE/BaseTools
+  fi
+  # EDK_TOOLS_PATH: check at last
+  if [[ ! -f $EDK_TOOLS_PATH/Conf/target.template ]]
+  then
+    echo "[ERR]:${BASH_SOURCE[0]}: Invalid \$EDK_TOOLS_PATH=$EDK_TOOLS_PATH!"
+    return 1
+  fi
+  env_path_rel_to_abs EDK_TOOLS_PATH $EDK_TOOLS_PATH
+
+  # PYTHON_COMMAND: check and try to set
+  # if not set
+  #   1. set for it from system installation
+  PYTHON_COMMAND=$(which python2)
+  #   2. override it via BASE_TOOLS_PYTHON
+  if [[ -n $BASE_TOOLS_PYTHON ]]
+  then
+    PYTHON_COMMAND=$BASE_TOOLS_PYTHON
+  fi
+  # PYTHON_COMMAND: check at last
+  if ! ( command -v $PYTHON_COMMAND >/dev/null 2>&1 )
+  then
+    echo "[ERR]:${BASH_SOURCE[0]}: Invalid \$PYTHON_COMMAND=$PYTHON_COMMAND!"
+    return 1
+  fi
+  export PYTHON_COMMAND
+
+  export PYTHONHASHSEED=1
+
+  return 0
+}
+
+create_conf()
+{
+  LAST_BASE_TOOLS_ENV=$WORKSPACE/Conf/.last_basetools.env
+
+  [[ -d $WORKSPACE/Conf ]] || mkdir $WORKSPACE/Conf
+
+  [[ -f $LAST_BASE_TOOLS_ENV ]] && return 0
+  for i in $EDK_TOOLS_PATH/Conf/*.template
+  do
+    cp -f $i $WORKSPACE/Conf/$(basename -s .template $i).txt
+  done
+  [[ -f $WORKSPACE/Conf/target.txt ]] || return 1
+
+  [[ -f $LAST_BASE_TOOLS_ENV ]] || echo > $LAST_BASE_TOOLS_ENV
+
+  return 0
+}
+
+check_tools()
+{
+  export PATH=$EDK_TOOLS_PATH/BinWrappers/PosixLike:$PATH
+
+  # c base tool check, if 1st time build or build env changes
+  if [[ $(uname) != $(cat $LAST_BASE_TOOLS_ENV) ]]
+  then
+    bash $WORKSPACE/KarlPkg/EfiUtils/Scripts/0_submodule_init.sh -s
+    echo "clean base c tools ..."
+    make -C $EDK_TOOLS_PATH/Source/C clean 1>/dev/null 2>&1
+    echo "build base c tools ..."
+    make -C $EDK_TOOLS_PATH/Source/C 1>/dev/null 2>&1
+    result=$([[ $? == 0 ]] && echo pass || echo fail)
+    echo "build base c tools end: $result"
+    if [[ $result == fail ]]
+    then
       return 1
+    else
+      echo $(uname) > $LAST_BASE_TOOLS_ENV
     fi
   fi
-
-  if [ $PYTHON3_ENABLE ] && [ $PYTHON3_ENABLE == TRUE ]
+  # python base tool check, not build and use script directly
+  if [[ ! -f $EDK_TOOLS_PATH/Source/Python/build/build.py ]]
   then
-    SetupPython3
+    echo "[ERR]:${BASH_SOURCE[0]}: $EDK_TOOLS_PATH/Source/Python!"
+    return 1
   fi
 
-  if [ $PYTHON3_ENABLE ] && [ $PYTHON3_ENABLE != TRUE ]
-  then
-    if [ $origin_version ];then
-      origin_version=
-    fi
-    for python in $(whereis python2)
-    do
-      python=$(echo $python | grep "[[:digit:]]$" || true)
-      python_version=${python##*python}
-      if [ -z "${python_version}" ] || (! command -v $python >/dev/null 2>&1);then
-        continue
-      fi
-      if [ -z $origin_version ]
-      then
-        origin_version=$python_version
-        export PYTHON_COMMAND=$python
-        continue
-      fi
-      if [[ "$origin_version" < "$python_version" ]]; then
-        origin_version=$python_version
-        export PYTHON_COMMAND=$python
-      fi
-    done
-    return 0
-  fi
-
-  SetupPython3
+  return 0
 }
 
-function SourceEnv()
+main()
 {
-  SetWorkspace &&
-  SetupEnv
-  SetupPython
+  param_parse $@
+  [[ $? != 0 ]] && return 1
+  check_envar
+  [[ $? != 0 ]] && return 2
+  create_conf
+  [[ $? != 0 ]] && return 3
+  check_tools
+  [[ $? != 0 ]] && return 4
+  echo EDKII setup is done!
+  return 0
 }
 
-I=$#
-while [ $I -gt 0 ]
-do
-  case "$1" in
-    BaseTools)
-      # Ignore argument for backwards compatibility
-      shift
-    ;;
-    --reconfig)
-      RECONFIG=TRUE
-      shift
-    ;;
-    *)
-      HelpMsg
-      break
-    ;;
-  esac
-  I=$((I - 1))
-done
-
-if [ $I -gt 0 ]
-then
-  return 1
-fi
-
-SourceEnv
-
-unset SCRIPTNAME RECONFIG
-
-return $?
+main $@

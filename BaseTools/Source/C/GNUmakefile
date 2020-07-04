@@ -82,10 +82,4 @@ $(VFRAUTOGEN): VfrCompile/VfrSyntax.g
 
 clean:  $(patsubst %,%-clean,$(sort $(SUBDIRS)))
 
-clean: localClean
-
-localClean:
-	rm -f $(MAKEROOT)/bin/*
-	-rmdir $(MAKEROOT)/libs $(MAKEROOT)/bin
-
 include Makefiles/footer.makefile
