@@ -118,7 +118,7 @@ esac
 [[ -z $BUILD_TOOL ]] && {
   case `uname` in
   Darwin*)
-    BUILD_TOOL=XCODE5;;
+    BUILD_TOOL=CLANGPDB;;
   Linux*)
     BUILD_TOOL=GCC5;;
   esac

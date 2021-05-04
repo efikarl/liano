@@ -1,9 +1,6 @@
 .vscode
 .DS_Store
 
-*_extdep
-__pycache__
-
 /Build
 /Conf
 /*.log

@@ -113,18 +113,12 @@ check_envar()
 
 create_conf()
 {
-  LAST_BASE_TOOLS_ENV=$WORKSPACE/Conf/.last_basetools.env
-
   [[ -d $WORKSPACE/Conf ]] || mkdir $WORKSPACE/Conf
-
-  [[ -f $LAST_BASE_TOOLS_ENV ]] && return 0
   for i in $EDK_TOOLS_PATH/Conf/*.template
   do
     cp -f $i $WORKSPACE/Conf/$(basename -s .template $i).txt
   done
   [[ -f $WORKSPACE/Conf/target.txt ]] || return 1
-
-  [[ -f $LAST_BASE_TOOLS_ENV ]] || echo > $LAST_BASE_TOOLS_ENV
 
   return 0
 }
@@ -133,10 +127,18 @@ check_tools()
 {
   export PATH=$EDK_TOOLS_PATH/BinWrappers/PosixLike:$PATH
 
-  # c base tool check, if 1st time build or build env changes
-  if [[ $(uname) != $(cat $LAST_BASE_TOOLS_ENV) ]]
+  LAST_TIME_BUILD_OS=$WORKSPACE/ltbos.log
+
+  [[ -f $LAST_TIME_BUILD_OS ]] || echo > $LAST_TIME_BUILD_OS
+  # c base tool check, if 1st time build or build os changes
+  if [[ $(uname) != $(cat $LAST_TIME_BUILD_OS) ]]
   then
-    bash $WORKSPACE/KarlPkg/EfiUtils/Scripts/0_submodule_init.sh -s
+    if ( git submodule init && git submodule update )
+    then
+      rm -R -f BaseTools/Source/C/BrotliCompress/brotli
+      mkdir -p BaseTools/Source/C/BrotliCompress/brotli
+      cp -R -f MdeModulePkg/Library/BrotliCustomDecompressLib/brotli/* BaseTools/Source/C/BrotliCompress/brotli
+    fi
     echo "clean base c tools ..."
     make -C $EDK_TOOLS_PATH/Source/C clean 1>/dev/null 2>&1
     echo "build base c tools ..."
@@ -147,7 +149,7 @@ check_tools()
     then
       return 1
     else
-      echo $(uname) > $LAST_BASE_TOOLS_ENV
+      echo $(uname) > $LAST_TIME_BUILD_OS
     fi
   fi
   # python base tool check, not build and use script directly
