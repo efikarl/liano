@@ -373,6 +373,7 @@ INF  SecurityPkg/Tcg/Tcg2Config/Tcg2ConfigDxe.inf
 !endif
 !endif
 
+INF  KarlPkg/RefCode/HiiSample/HiiSample.inf
 ################################################################################
 
 [FV.FVMAIN_COMPACT]

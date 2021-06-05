@@ -145,10 +145,10 @@ done
 #
 # Build or Run OVMF
 #
-if [[ $RUN_QEMU != RunGumpRun ]]
-then
+# if [[ $RUN_QEMU != RunGumpRun ]]
+# then
   echo build $BUILD_ARGS && build $BUILD_ARGS
-else
+# else
   case $BUILD_ARCH in
   IA32)
     QEMU_CMD=qemu-system-i386
@@ -175,16 +175,16 @@ else
   case $QEMU_VER in
   0.*.* | 1.[0-5].*)
     QEMUx_BIOS="-bios $OVMF_FD"
-    QEMU_NoNET="-net none"
-    QEMUx_ARGS="$QEMUx_ARGS $QEMUx_BIOS $QEMU_NoNET"
+    QEMUx_HWOP="-net none"
+    QEMUx_ARGS="$QEMUx_ARGS $QEMUx_BIOS $QEMUx_HWOP"
     ;;
   *)
     QEMUx_BIOS="-drive file=$CODE_FD,if=pflash,format=raw,unit=0,readonly=on -drive file=$VARS_FD,if=pflash,format=raw,unit=1"
-    QEMU_NoNET="-nic none"
-    QEMUx_ARGS="$QEMUx_ARGS $QEMUx_BIOS $QEMU_NoNET"
+    QEMUx_HWOP="-nic none -m 4G"
+    QEMUx_ARGS="$QEMUx_ARGS $QEMUx_BIOS $QEMUx_HWOP"
     ;;
   esac
 
   QEMUx_DBGS="-debugcon file:debug.log -global isa-debugcon.iobase=0x402"
   echo "OVMF is running ..." && cd $WORKSPACE && $QEMU_CMD $QEMUx_DBGS $QEMUx_ARGS
-fi
+# fi

@@ -230,6 +230,8 @@
   TpmMeasurementLib|MdeModulePkg/Library/TpmMeasurementLibNull/TpmMeasurementLibNull.inf
 !endif
 
+  HiiAttributeQuestionLib|KarlPkg/Library/HiiAttributeQuestionTreeLib/HiiAttributeQuestionLib.inf
+
 [LibraryClasses.common]
   BaseCryptLib|CryptoPkg/Library/BaseCryptLib/BaseCryptLib.inf
 
@@ -1015,3 +1017,5 @@
       Tpm12DeviceLib|SecurityPkg/Library/Tpm12DeviceLibDTpm/Tpm12DeviceLibDTpm.inf
   }
 !endif
+
+KarlPkg/RefCode/HiiSample/HiiSample.inf

@@ -1,0 +1,51 @@
+## @file
+#  Copyright ©2021 Liu Yi, efikarl@yeah.net
+#
+#  This program is just made available under the terms and conditions of the
+#  MIT license: http://www.efikarl.com/mit-license.html
+#
+#  THE PROGRAM IS DISTRIBUTED UNDER THE MIT LICENSE ON AN "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
+
+[Defines]
+  INF_VERSION                           = 0x00010005
+  BASE_NAME                             = HiiSample
+  FILE_GUID                             = 60508b0f-c5f6-11eb-ad48-a4bb6db1e8d0
+  MODULE_TYPE                           = UEFI_DRIVER
+  VERSION_STRING                        = 1
+  ENTRY_POINT                           = HiiSampleDriverEntryPoint
+  UEFI_HII_RESOURCE_SECTION             = TRUE
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+  KarlPkg/KarlPkg.dec
+
+[Sources]
+  HiiSample.h
+  HiiSample.c
+  Formset1.uni
+  Formset1.vfr
+  Formset1.h
+  Formset1.c
+  HiiConfigAccess.c
+  HiiConfigAccess.h
+
+[LibraryClasses]
+  UefiDriverEntryPoint
+  UefiBootServicesTableLib
+  UefiRuntimeServicesTableLib
+  MemoryAllocationLib
+  BaseMemoryLib
+  BaseLib
+  UefiLib
+  DevicePathLib
+  DebugLib
+  HiiLib
+  UefiHiiServicesLib
+  HiiAttributeQuestionLib
+
+[Protocols]
+  gEfiHiiPackageListProtocolGuid
+  gEfiHiiDatabaseProtocolGuid
+  gEfiHiiConfigAccessProtocolGuid       ## PRODUCES

@@ -19,4 +19,4 @@
 [LibraryClasses]
   ##  @libraryclass  TODO: Brief Description of Library Class KarlLib
   ##
-  IpmiLib | Ipmi/Include/Library/IpmiLib.c
+  HiiAttributeQuestionLib               | KarlPkg/Include/Library/HiiAttributeQuestionLib.h

@@ -1,0 +1,150 @@
+/** @file
+  Copyright ©2021 Liu Yi, efikarl@yeah.net
+
+  This program is just made available under the terms and conditions of the
+  MIT license: http://www.efikarl.com/mit-license.html
+
+  THE PROGRAM IS DISTRIBUTED UNDER THE MIT LICENSE ON AN "AS IS" BASIS,
+  WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
+--*/
+#include "Formset1.vfr.h"
+
+formset
+  guid    = FORMSET1_GUID,
+  title   = STRING_TOKEN(STR_SAMPLE_FORM_SET_TITLE),
+  help    = STRING_TOKEN(STR_SAMPLE_FORM_SET_HELP),
+  classguid = EFI_HII_PLATFORM_SETUP_FORMSET_GUID,
+
+  //
+  // Define a Buffer Storage (EFI_IFR_VARSTORE)
+  //
+  varstore      FORMSET1_SETUP_TYPE_VARSTORE,
+    varid     = FORMSET1_VARID_TYPE_VARSTORE,
+    name      = Formset1SetupVarstore,
+    guid      = FORMSET1_GUID;
+  //
+  // Define a Buffer Storage (EFI_IFR_VARSTORE_EFI)
+  //
+  efivarstore   FORMSET1_SETUP_TYPE_VARSTORE_EFI,
+    varid     = FORMSET1_VARID_TYPE_VARSTORE_EFI,
+    attribute = EFI_VARIABLE_BOOTSERVICE_ACCESS | EFI_VARIABLE_NON_VOLATILE,
+    name      = Formset1SetupVarstoreEfi,
+    guid      = FORMSET1_GUID;
+
+  form formid = FORM1, title = STRING_TOKEN(STR_SAMPLE_FORM1_TITLE);
+    //
+    // EFI_IFR_TEXT
+    //
+    text help = STRING_TOKEN(STR_TEXT_HELP), text = STRING_TOKEN(STR_WHO_I_AM), text = STRING_TOKEN(STR_I_AM_WHO);
+    //
+    // question id is unique in formset even looks the same
+    //
+    checkbox
+      varid   = Formset1SetupVarstoreEfi.Bit0,
+      prompt  = STRING_TOKEN(STR_QID_UNIQUE_PROMPT),
+      help    = STRING_TOKEN(STR_QID_UNIQUE_HELP),
+      flags   = CHECKBOX_DEFAULT,
+    endcheckbox;
+    // goto without end-op
+    goto FORM2,
+      prompt  = STRING_TOKEN(STR_GOTO_FORM2_PROMPT),
+      help    = STRING_TOKEN(STR_GOTO_FORM_HELP);
+    //
+    // EFI_IFR_CHECKBOX
+    //
+    checkbox
+      varid   = Formset1SetupVarstore.CheckBox,
+      prompt  = STRING_TOKEN(STR_CHECKBOX_PROMPT),
+      help    = STRING_TOKEN(STR_CHECKBOX_HELP),
+      flags   = CHECKBOX_DEFAULT,
+    endcheckbox;
+    //
+    // EFI_IFR_NUMERIC
+    //
+    numeric
+      varid   = Formset1SetupVarstore.Numeric,
+      prompt  = STRING_TOKEN(STR_NUMERIC_PROMPT),
+      help    = STRING_TOKEN(STR_NUMERIC_HELP),
+      flags   = DISPLAY_UINT_HEX,
+      minimum = 0,
+      maximum = 0xff,
+      step    = 0,
+      default = 0x80,
+    endnumeric;
+    //
+    // EFI_IFR_ONE_OF
+    //
+    oneof
+      name    = OneOf,                                      // Define reference name for Question
+      varid   = Formset1SetupVarstore.OneOf,                // Use "DataStructure.Member" to reference Buffer Storage
+      prompt  = STRING_TOKEN(STR_ONE_OF_PROMPT),
+      help    = STRING_TOKEN(STR_ONE_OF_HELP),
+      //
+      // Define an option (EFI_IFR_ONE_OF_OPTION)
+      //
+      option text = STRING_TOKEN(STR_ONE_OF_TEXT1), value = 0x1, flags = 0;
+      option text = STRING_TOKEN(STR_ONE_OF_TEXT2), value = 0x2, flags = 0;
+      option text = STRING_TOKEN(STR_ONE_OF_TEXT3), value = 0x3, flags = 0;
+      //
+      // DEFAULT indicate this option will be marked with EFI_IFR_OPTION_DEFAULT
+      //
+      option text = STRING_TOKEN(STR_ONE_OF_TEXT4), value = 0x4, flags = DEFAULT;
+    endoneof;
+    //
+    // EFI_IFR_ORDERED_LIST
+    //
+    orderedlist
+      varid   = Formset1SetupVarstore.OrderedList,
+      prompt  = STRING_TOKEN(STR_ORDERED_LIST_PROMPT),
+      help    = STRING_TOKEN(STR_ORDERED_LIST_HELP),
+      flags   = INTERACTIVE | RESET_REQUIRED,
+      option text = STRING_TOKEN(STR_BOOT_OPTION2), value = 2, flags = 0;
+      option text = STRING_TOKEN(STR_BOOT_OPTION1), value = 1, flags = 0;
+      option text = STRING_TOKEN(STR_BOOT_OPTION4), value = 4, flags = 0;
+      option text = STRING_TOKEN(STR_BOOT_OPTION3), value = 3, flags = 0;
+      option text = STRING_TOKEN(STR_EMPTY_STRING), value = {1, 2, 3, 4}, flags = DEFAULT;
+    endlist;
+  //
+  // form 1 stops here
+  //
+  endform;
+
+  form formid = FORM2, title = STRING_TOKEN(STR_SAMPLE_FORM2_TITLE);
+    goto FORM1,
+      prompt  = STRING_TOKEN(STR_GOTO_FORM1_PROMPT),
+      help    = STRING_TOKEN(STR_GOTO_FORM_HELP);
+
+    checkbox
+      varid   = Formset1SetupVarstoreEfi.Bit0,
+      prompt  = STRING_TOKEN(STR_QID_UNIQUE_PROMPT),
+      help    = STRING_TOKEN(STR_QID_UNIQUE_HELP),
+      flags   = CHECKBOX_DEFAULT,
+    endcheckbox;
+    //
+    // EFI_IFR_ACTION = EFI_IFR_TEXT with flags INTERACTIVE
+    //
+    text
+      help    = STRING_TOKEN(STR_EXIT),
+      text    = STRING_TOKEN(STR_EXIT),
+      flags   = INTERACTIVE,
+      key     = FORM2_KEY_STR_EXIT;
+
+    text
+      help    = STRING_TOKEN(STR_SAVE),
+      text    = STRING_TOKEN(STR_SAVE),
+      flags   = INTERACTIVE,
+      key     = FORM2_KEY_STR_SAVE;
+
+    text
+      help    = STRING_TOKEN(STR_FORM_ASIS_AND_EXIT),
+      text    = STRING_TOKEN(STR_FORM_ASIS_AND_EXIT),
+      flags   = INTERACTIVE,
+      key     = FORM2_KEY_STR_FORM_ASIS_AND_EXIT;
+
+    text
+      help    = STRING_TOKEN(STR_FORM_SAVE_AND_EXIT),
+      text    = STRING_TOKEN(STR_FORM_SAVE_AND_EXIT),
+      flags   = INTERACTIVE,
+      key     = FORM2_KEY_STR_FORM_SAVE_AND_EXIT;
+  endform;
+endformset;
