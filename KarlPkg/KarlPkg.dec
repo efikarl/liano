@@ -1,0 +1,22 @@
+[Defines]
+  DEC_SPECIFICATION                     = 0x00010005
+  PACKAGE_NAME                          = KarlPkg
+  PACKAGE_GUID                          = D60C9E40-FDF8-48FD-9F7B-D9607142C735
+  PACKAGE_VERSION                       = 0.1
+
+[Includes]
+  Include
+  Ipmi/Include
+
+[Ppis]
+  ## Ipmi/Include/Protocol/IpmiKcsPpi.h
+  gEfiIpmiKcsPpiGuid                    = { 0xefcbb460, 0x1749, 0x44c5, { 0xa9, 0xff, 0x99, 0x8e, 0xa4, 0x9b, 0x01, 0x47 } }
+
+[Protocols]
+  ## Ipmi/Include/Protocol/IpmiKcsProtocol.h
+  gEfiIpmiKcsProtocolGuid               = { 0x8e35a95d, 0x98e5, 0x46b3, { 0x99, 0x12, 0x2d, 0x32, 0xa8, 0x3b, 0xad, 0xf0 } }
+
+[LibraryClasses]
+  ##  @libraryclass  TODO: Brief Description of Library Class KarlLib
+  ##
+  IpmiLib | Ipmi/Include/Library/IpmiLib.c

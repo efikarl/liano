@@ -1,0 +1,48 @@
+###@file
+#  IPMI KCS PPI Implement.
+#
+#  Copyright (c) 2016, efikarl.
+#
+#  This program is just made available under the terms and conditions of the
+#  MIT license: http://www.efikarl.com/mit-license.html
+#
+#  THE PROGRAM IS DISTRIBUTED UNDER THE MIT LICENSE ON AN "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
+
+[Defines]
+  INF_VERSION                           = 0x00010005
+  BASE_NAME                             = KcsPei
+  FILE_GUID                             = FAFA1CE1-CDD1-4F84-A941-989D2850D520
+  MODULE_TYPE                           = PEIM
+  VERSION_STRING                        = 1.0
+  ENTRY_POINT                           = BmcInitEntryPoint
+
+#
+# The following information is for reference only and not required by the build tools.
+#
+#  VALID_ARCHITECTURES                  = IA32 X64 IPF EBC
+#
+
+[Sources]
+  ../Common/IpmiKcs.h
+  ../Common/IpmiKcs.c
+  IpmiCmd.h
+  IpmiCmd.c
+  KcsPei.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  KarlPkg/KarlPkg.dec
+
+[LibraryClasses]
+  PeimEntryPoint
+  BaseLib
+  IoLib
+  TimerLib
+  DebugLib
+
+[Ppis]
+  gEfiIpmiKcsPpiGuid                    ## PRODUCES
+
+[Depex]
+  TRUE

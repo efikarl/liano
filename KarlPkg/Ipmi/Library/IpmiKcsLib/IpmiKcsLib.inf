@@ -1,0 +1,21 @@
+[Defines]
+  INF_VERSION                           = 0x00010005
+  BASE_NAME                             = IpmiBaseLib
+  FILE_GUID                             = 29DCA7D2-3ADF-4AD7-AF7B-22C17DB3DDDC
+  MODULE_TYPE                           = BASE
+  VERSION_STRING                        = 1.0
+  LIBRARY_CLASS                         = IpmiBaseLib|DXE_DRIVER DXE_RUNTIME_DRIVER
+   
+[sources]
+  IpmiBaseLib.c
+  
+[Packages]
+  MdePkg/MdePkg.dec
+  KarlPkg/KarlPkg.dec
+
+[LibraryClasses]
+  DebugLib
+  UefiBootServicesTableLib
+ 
+[Protocols]
+  gEfiIpmiKcsProtocolGuid               ## CONSUMES
