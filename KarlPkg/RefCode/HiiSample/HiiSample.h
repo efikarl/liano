@@ -29,7 +29,26 @@
 #include <Protocol/HiiConfigRouting.h>
 
 #include "HiiConfigAccess.h"
-#include "Formset1.h"
+#include "Formset1.vfr.h"
+#include "Formset2.vfr.h"
+//
+// This is the auto-gen IFR bin data for each formset in VFR.
+// This data is ready to be as input of HiiAddPackages() to create a packagelist.
+//
+extern UINT8  Formset1Bin[];
+extern UINT8  Formset2Bin[];
+//
+// This is the auto-gen String package data for all .UNI files.
+// This data is ready to be as input of HiiAddPackages() to create a packagelist.
+//
+extern UINT8  HiiSampleStrings[];
+///
+/// HII specific Vendor Device Path definition.
+///
+typedef struct {
+  VENDOR_DEVICE_PATH              VendorDevicePath;
+  EFI_DEVICE_PATH_PROTOCOL        End;
+} HII_DEVICE_PATH;
 
 typedef struct {
   FORMSET1_SETUP_TYPE_VARSTORE_EFI      Formset1SetupVarstoreEfi;
@@ -39,7 +58,7 @@ typedef struct {
 
 #define HII_SAMPLE_PRIVATE_SIGNATURE SIGNATURE_32 ('H', 'S', 'P', 'D')
 typedef struct {
-  EFI_HII_HANDLE                        Handle;
+  EFI_HII_HANDLE                        Handle[2];
   //
   // Consumed Protocols
   //
@@ -53,7 +72,7 @@ typedef struct {
 
 typedef struct {
   UINTN                                 Signature;
-  EFI_HANDLE                            Handle;
+  EFI_HANDLE                            Handle[2];
 
   HII_HANDLE_AND_PROTOCOL               Hii;
   HII_SAMPLE_SETUP                      Setup;

@@ -12,9 +12,10 @@
   BASE_NAME                             = HiiSample
   FILE_GUID                             = 60508b0f-c5f6-11eb-ad48-a4bb6db1e8d0
   MODULE_TYPE                           = UEFI_DRIVER
-  VERSION_STRING                        = 1
+  VERSION_STRING                        = 2.0
   ENTRY_POINT                           = HiiSampleDriverEntryPoint
-  UEFI_HII_RESOURCE_SECTION             = TRUE
+  MODULE_UNI_FILE                       = HiiSample.uni
+# UEFI_HII_RESOURCE_SECTION             = TRUE
 
 [Packages]
   MdePkg/MdePkg.dec
@@ -24,12 +25,15 @@
 [Sources]
   HiiSample.h
   HiiSample.c
-  Formset1.uni
-  Formset1.vfr
-  Formset1.h
-  Formset1.c
   HiiConfigAccess.c
   HiiConfigAccess.h
+  Formset.uni
+  Formset1.uni
+  Formset1.vfr.h
+  Formset1.vfr
+  Formset2.uni
+  Formset2.vfr.h
+  Formset2.vfr
 
 [LibraryClasses]
   UefiDriverEntryPoint

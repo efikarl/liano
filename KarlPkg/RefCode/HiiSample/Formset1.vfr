@@ -8,12 +8,12 @@
   WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 --*/
 #include "Formset1.vfr.h"
+#include "Formset2.vfr.h"
 
 formset
   guid    = FORMSET1_GUID,
-  title   = STRING_TOKEN(STR_SAMPLE_FORM_SET_TITLE),
-  help    = STRING_TOKEN(STR_SAMPLE_FORM_SET_HELP),
-  classguid = EFI_HII_PLATFORM_SETUP_FORMSET_GUID,
+  title   = STRING_TOKEN(STR_SAMPLE_FORMSET1_TITLE),
+  help    = STRING_TOKEN(STR_SAMPLE_FORMSET1_HELP),
 
   //
   // Define a Buffer Storage (EFI_IFR_VARSTORE)
@@ -48,7 +48,7 @@ formset
     // goto without end-op
     goto FORM2,
       prompt  = STRING_TOKEN(STR_GOTO_FORM2_PROMPT),
-      help    = STRING_TOKEN(STR_GOTO_FORM_HELP);
+      help    = STRING_TOKEN(STR_GOTO_FORMN_HELP);
     //
     // EFI_IFR_CHECKBOX
     //
@@ -82,13 +82,13 @@ formset
       //
       // Define an option (EFI_IFR_ONE_OF_OPTION)
       //
-      option text = STRING_TOKEN(STR_ONE_OF_TEXT1), value = 0x1, flags = 0;
-      option text = STRING_TOKEN(STR_ONE_OF_TEXT2), value = 0x2, flags = 0;
-      option text = STRING_TOKEN(STR_ONE_OF_TEXT3), value = 0x3, flags = 0;
+      option text = STRING_TOKEN(STR_ONE_OF_OPT1), value = 0x1, flags = 0;
+      option text = STRING_TOKEN(STR_ONE_OF_OPT2), value = 0x2, flags = 0;
+      option text = STRING_TOKEN(STR_ONE_OF_OPT3), value = 0x3, flags = 0;
       //
       // DEFAULT indicate this option will be marked with EFI_IFR_OPTION_DEFAULT
       //
-      option text = STRING_TOKEN(STR_ONE_OF_TEXT4), value = 0x4, flags = DEFAULT;
+      option text = STRING_TOKEN(STR_ONE_OF_OPT4), value = 0x4, flags = DEFAULT;
     endoneof;
     //
     // EFI_IFR_ORDERED_LIST
@@ -102,8 +102,14 @@ formset
       option text = STRING_TOKEN(STR_BOOT_OPTION1), value = 1, flags = 0;
       option text = STRING_TOKEN(STR_BOOT_OPTION4), value = 4, flags = 0;
       option text = STRING_TOKEN(STR_BOOT_OPTION3), value = 3, flags = 0;
-      option text = STRING_TOKEN(STR_EMPTY_STRING), value = {1, 2, 3, 4}, flags = DEFAULT;
+      option text = STRING_TOKEN(STR_NONE), value = {1, 2, 3, 4}, flags = DEFAULT;
     endlist;
+    //
+    // goto form of a formset
+    //
+    goto formsetguid = FORMSET2_GUID, formid = 0x1, question = 0,
+      prompt  = STRING_TOKEN(STR_GOTO_FORMSET2_PROMPT),
+      help    = STRING_TOKEN(STR_GOTO_FORMSETN_HELP);
   //
   // form 1 stops here
   //
@@ -112,7 +118,7 @@ formset
   form formid = FORM2, title = STRING_TOKEN(STR_SAMPLE_FORM2_TITLE);
     goto FORM1,
       prompt  = STRING_TOKEN(STR_GOTO_FORM1_PROMPT),
-      help    = STRING_TOKEN(STR_GOTO_FORM_HELP);
+      help    = STRING_TOKEN(STR_GOTO_FORMN_HELP);
 
     checkbox
       varid   = Formset1SetupVarstoreEfi.Bit0,

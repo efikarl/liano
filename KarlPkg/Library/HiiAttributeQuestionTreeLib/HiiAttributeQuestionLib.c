@@ -23,12 +23,9 @@
 
 #include "HiiAttributeQuestionLib.h"
 
+LIST_ENTRY    mFormSetList            = INITIALIZE_LIST_HEAD_VARIABLE(mFormSetList);
+LIST_ENTRY    mGotoTmpList            = INITIALIZE_LIST_HEAD_VARIABLE(mGotoTmpList);
 LIST_ENTRY    gAttributeQuestionList  = INITIALIZE_LIST_HEAD_VARIABLE(gAttributeQuestionList);
-LIST_ENTRY    mFormList               = INITIALIZE_LIST_HEAD_VARIABLE(mFormList);
-LIST_ENTRY    mGotoList               = INITIALIZE_LIST_HEAD_VARIABLE(mGotoList);
-
-EFI_IFR_FORM_SET    *mFormSet         = NULL;
-UINTN                mFormSetSize     = 0;
 
 BOOLEAN AttributeQuestionIsOp (
   UINT8                                 OpCode
@@ -43,9 +40,9 @@ BOOLEAN AttributeQuestionIsOp (
 }
 
 EFI_STATUS
-AttributeQuestionLoadFormSet (
-  IN     EFI_HII_HANDLE                 Handle,
-  IN OUT EFI_GUID                       *FormSetGuid
+AttributeQuestionFormSetRegister (
+  IN     EFI_HII_HANDLE                 HiiHandle,
+  IN     EFI_GUID                       *FormSetId
 ) {
   EFI_STATUS                            Status;
   EFI_HII_PACKAGE_LIST_HEADER           *PackageList;
@@ -55,8 +52,9 @@ AttributeQuestionLoadFormSet (
   UINT8                                 Index;
   EFI_GUID                              *ClassGuid;
   UINT8                                 ClassGuidCount;
-  BOOLEAN                               ClassGuidMatch;
   BOOLEAN                               FormSetFound;
+  FORMSET_NODE                          *NodeOfFormSet;
+  UINTN                                 InTheFormSet;
 
   DEBUG ((DEBUG_VERBOSE, "%a().+\n", __FUNCTION__));
   Package     = NULL;
@@ -66,11 +64,11 @@ AttributeQuestionLoadFormSet (
   //
   PackageList     = NULL;
   PackageListSize = 0;
-  Status = gHiiDatabase->ExportPackageLists (gHiiDatabase, Handle, &PackageListSize, PackageList);
+  Status = gHiiDatabase->ExportPackageLists (gHiiDatabase, HiiHandle, &PackageListSize, PackageList);
   if (Status == EFI_BUFFER_TOO_SMALL) {
     PackageList = AllocateZeroPool (PackageListSize);
     ASSERT (PackageList != NULL);
-    Status = gHiiDatabase->ExportPackageLists (gHiiDatabase, Handle, &PackageListSize, PackageList);
+    Status = gHiiDatabase->ExportPackageLists (gHiiDatabase, HiiHandle, &PackageListSize, PackageList);
   }
   if (EFI_ERROR (Status)) {
     goto Done;
@@ -79,72 +77,184 @@ AttributeQuestionLoadFormSet (
   //
   // get form package from this hii package list
   //
-  while ((UINTN) (Package = (EFI_HII_PACKAGE_HEADER *) ((UINTN) PackageList + sizeof (EFI_HII_PACKAGE_LIST_HEADER))) < (UINTN) PackageList + PackageListSize) {
+  Package = (EFI_HII_PACKAGE_HEADER *) ((UINTN) PackageList + sizeof (EFI_HII_PACKAGE_LIST_HEADER));
+  for (Package = (EFI_HII_PACKAGE_HEADER *) ((UINTN) PackageList + sizeof (EFI_HII_PACKAGE_LIST_HEADER));
+       (UINTN) Package < (UINTN) PackageList + PackageListSize;
+       Package = (EFI_HII_PACKAGE_HEADER *) ((UINTN) Package + (UINTN) Package->Length)) {
     if (Package->Type != EFI_HII_PACKAGE_FORMS) {
       continue;
     }
-    FormSetFound = FALSE;
     //
     // search formset in this form package
     //
-    while ((UINTN) (OpCodeData = (EFI_IFR_OP_HEADER *) ((UINTN) Package + sizeof (EFI_HII_PACKAGE_HEADER))) < (UINTN) Package + Package->Length) {
+    InTheFormSet = 0;
+    for (OpCodeData = (EFI_IFR_OP_HEADER *) ((UINTN) Package + sizeof (EFI_HII_PACKAGE_HEADER));
+         (UINTN) OpCodeData < (UINTN) Package + Package->Length;
+         OpCodeData = (EFI_IFR_OP_HEADER *) ((UINTN) OpCodeData + OpCodeData->Length)) {
+      if (InTheFormSet) {
+        if (OpCodeData->Scope) {
+          InTheFormSet++;
+        } else if (OpCodeData->OpCode == EFI_IFR_END_OP) {
+          InTheFormSet--;
+        }
+        if (!InTheFormSet) {
+          NodeOfFormSet->FormSetSize = (UINTN) OpCodeData + OpCodeData->Length - (UINTN) NodeOfFormSet->FormSet;
+          NodeOfFormSet->FormSet = AllocateCopyPool(NodeOfFormSet->FormSetSize, NodeOfFormSet->FormSet);
+          if (!NodeOfFormSet->FormSet) {
+            Status = EFI_OUT_OF_RESOURCES;
+            goto Done;
+          }
+          Status = AttributeQuestionFormListInit(NodeOfFormSet->FormSet, NodeOfFormSet->FormSetSize, &NodeOfFormSet->FormList);
+          if (EFI_ERROR (Status)) {
+            goto Done;
+          }
+        }
+      }
       if (OpCodeData->OpCode != EFI_IFR_FORM_SET_OP) {
         continue;
       }
-      if (FormSetGuid == NULL) {
+      FormSetFound = FALSE;
+      if (FormSetId == NULL) {
         FormSetFound = TRUE;
-        break;
-      } else if (CompareGuid (FormSetGuid, &((EFI_IFR_FORM_SET *) OpCodeData)->Guid)) {
+      } else if (CompareGuid (FormSetId, &((EFI_IFR_FORM_SET *) OpCodeData)->Guid)) {
         FormSetFound = TRUE;
-        break;
       } else if (((EFI_IFR_OP_HEADER *) OpCodeData)->Length > sizeof (EFI_IFR_FORM_SET)) {
         ClassGuid       = (EFI_GUID *) (OpCodeData + sizeof (EFI_IFR_FORM_SET));
         ClassGuidCount  = (UINT8) (((EFI_IFR_FORM_SET *) OpCodeData)->Flags & 0x3);
-        ClassGuidMatch  = FALSE;
         for (Index = 0; Index < ClassGuidCount; Index++) {
-          if (CompareGuid (FormSetGuid, ClassGuid + Index)) {
-            ClassGuidMatch = TRUE;
+          if (CompareGuid (FormSetId, ClassGuid + Index)) {
+            FormSetFound = TRUE;
             break;
           }
         }
-        if (ClassGuidMatch) {
-          FormSetFound = TRUE;
-          break;
-        }
-      } else if (FormSetGuid == &gEfiHiiPlatformSetupFormsetGuid) {
-        FormSetFound = TRUE;
-        break;
       }
-    }
-    if (FormSetFound) {
-      break;
+      if (FormSetFound) {
+        InTheFormSet = 1;
+        //
+        // init mFormSetList database
+        //
+        NodeOfFormSet = AllocateZeroPool(sizeof(FORMSET_NODE));
+        if (!NodeOfFormSet) {
+          Status = EFI_OUT_OF_RESOURCES;
+          goto Done;
+        }
+        InsertTailList(&mFormSetList, &NodeOfFormSet->Link);
+        NodeOfFormSet->Signature    = FORMSET_NODE_SIGNATURE;
+        NodeOfFormSet->HiiHandle    = HiiHandle;
+        NodeOfFormSet->FormSet      = (EFI_IFR_FORM_SET *) OpCodeData;
+        NodeOfFormSet->FormSetSize  = 0;
+        InitializeListHead(&NodeOfFormSet->FormList);
+      }
     }
   }
   FreePool (PackageList);
 
-  if (FormSetGuid != NULL) {
-    CopyMem (FormSetGuid, &((EFI_IFR_FORM_SET *) OpCodeData)->Guid, sizeof (EFI_GUID));
-  }
-  mFormSetSize = Package->Length - sizeof(EFI_HII_PACKAGE_HEADER);
-  mFormSet     = AllocateCopyPool (mFormSetSize, OpCodeData);
-  if (mFormSet == NULL) {
-    Status = EFI_OUT_OF_RESOURCES;
-  } else {
-    Status = EFI_SUCCESS;
-  }
-
+  Status = EFI_SUCCESS;
 Done:
   DEBUG ((DEBUG_VERBOSE, "%a().- Status = %r\n", __FUNCTION__, Status));
   return Status;
 }
 
-EFI_STATUS
-AttributeQuestionFormListInit (
+VOID
+AttributeQuestionFormSetFree (
   VOID
 ) {
+  LIST_ENTRY                            *Link0;
+  LIST_ENTRY                            *NextLink0;
+  LIST_ENTRY                            *Link1;
+  LIST_ENTRY                            *NextLink1;
+  FORMSET_NODE                          *NodeOfFormSet;
+  FORM_NODE                             *NodeOfForm;
   //
-  // for one formset
+  // free mFormSetList
   //
+  BASE_LIST_FOR_EACH_SAFE(Link0, NextLink0, &mFormSetList) {
+    NodeOfFormSet = CR(Link0, FORMSET_NODE, Link, FORMSET_NODE_SIGNATURE);
+    BASE_LIST_FOR_EACH_SAFE(Link1, NextLink1, &NodeOfFormSet->FormList) {
+      NodeOfForm = CR(Link1, FORM_NODE, Link, FORM_NODE_SIGNATURE);
+      RemoveEntryList(&NodeOfForm->Link);
+      FreePool(NodeOfForm);
+    }
+    RemoveEntryList(&NodeOfFormSet->Link);
+    FreePool(NodeOfFormSet);
+  }
+}
+
+EFI_STATUS
+AttributeQuestionFormSetRegisterAll (
+  VOID
+) {
+  EFI_STATUS                            Status = EFI_NOT_STARTED;
+  EFI_HII_HANDLE                        *HiiHandles;
+  UINTN                                 Index;
+
+  HiiHandles = HiiGetHiiHandles (NULL);
+  if (!HiiHandles[0]) {
+    return EFI_NOT_READY;
+  }
+  for (Index = 0; HiiHandles[Index] != NULL; Index++) {
+    Status = AttributeQuestionFormSetRegister(HiiHandles[Index], NULL);
+    DEBUG ((DEBUG_INFO, "%a(): Index = %02d, Status = %r\n", __FUNCTION__, Index, Status));
+  }
+
+  if (EFI_ERROR(Status)) {
+    AttributeQuestionFormSetFree();
+  }
+  return Status;
+}
+
+FORMSET_NODE *
+AttributeQuestionGetFormSet (
+  IN      CONST EFI_HII_HANDLE          HiiHandle,
+  IN      CONST EFI_GUID                *FormSetId
+) {
+  FORMSET_NODE                          *NodeOfFormSet = NULL;
+  LIST_ENTRY                            *Link;
+  LIST_ENTRY                            *NextLink;
+
+  BASE_LIST_FOR_EACH_SAFE(Link, NextLink, &mFormSetList) {
+    NodeOfFormSet = CR(Link, FORMSET_NODE, Link, FORMSET_NODE_SIGNATURE);
+    if (!HiiHandle) {
+      if (CompareGuid(FormSetId, &NodeOfFormSet->FormSet->Guid)) {
+        break;
+      }
+    } else {
+      if ((HiiHandle == NodeOfFormSet->HiiHandle) && CompareGuid(FormSetId, &NodeOfFormSet->FormSet->Guid)) {
+        break;
+      }
+    }
+  }
+  return NodeOfFormSet;
+}
+
+EFI_HII_HANDLE *
+AttributeQuestionGetHiiHandle (
+  IN      CONST EFI_GUID                *FormSetId
+) {
+  EFI_HII_HANDLE                        HiiHandle      = NULL;
+  FORMSET_NODE                          *NodeOfFormSet = NULL;
+  LIST_ENTRY                            *Link;
+  LIST_ENTRY                            *NextLink;
+
+  BASE_LIST_FOR_EACH_SAFE(Link, NextLink, &mFormSetList) {
+    NodeOfFormSet = CR(Link, FORMSET_NODE, Link, FORMSET_NODE_SIGNATURE);
+    //
+    // address compare 1st to increase potential to get the right handle
+    //
+    if (CompareGuid(FormSetId, &NodeOfFormSet->FormSet->Guid)) {
+      HiiHandle = NodeOfFormSet->HiiHandle;
+      break;
+    }
+  }
+  return HiiHandle;
+}
+
+EFI_STATUS
+AttributeQuestionFormListInit (
+  IN      CONST EFI_IFR_FORM_SET        *FormSet,
+  IN            UINTN                   FormSetSize,
+  IN            LIST_ENTRY              *FormList
+) {
   EFI_STATUS                            Status;
   EFI_IFR_OP_HEADER                     *OpCodeData;
   EFI_IFR_FORM                          *Form;
@@ -152,36 +262,21 @@ AttributeQuestionFormListInit (
   FORM_NODE                             *NodeOfForm;
   LIST_ENTRY                            *Link;
   LIST_ENTRY                            *NextLink;
-  AQ_GOTO                               *NodeOfGoto;
-
+  //
+  // for one formset
+  //
   DEBUG ((DEBUG_VERBOSE, "%a().+\n", __FUNCTION__));
-  //
-  // reset mFormList for new form list
-  //
-  BASE_LIST_FOR_EACH_SAFE(Link, NextLink, &mFormList) {
-    NodeOfForm = CR(Link, FORM_NODE, Link, FORM_NODE_SIGNATURE);
-    RemoveEntryList(&NodeOfForm->Link);
-    FreePool(NodeOfForm);
-  }
-  //
-  // reset mGotoList for new form list
-  //
-  BASE_LIST_FOR_EACH_SAFE(Link, NextLink, &mGotoList) {
-    NodeOfGoto = CR(Link, AQ_GOTO, Link, AQ_GOTO_SIGNATURE);
-    RemoveEntryList(&NodeOfGoto->Link);
-    FreePool(NodeOfGoto);
-  }
   //
   // for each formset
   //
-  OpCodeData = (EFI_IFR_OP_HEADER *) mFormSet;
-  while ((UINTN) (OpCodeData = (EFI_IFR_OP_HEADER *) ((UINTN) OpCodeData + OpCodeData->Length)) < (UINTN) mFormSet + mFormSetSize) {
+  OpCodeData = (EFI_IFR_OP_HEADER *) FormSet;
+  while ((UINTN) (OpCodeData = (EFI_IFR_OP_HEADER *) ((UINTN) OpCodeData + OpCodeData->Length)) < (UINTN) FormSet + FormSetSize) {
     if (((EFI_IFR_OP_HEADER *) OpCodeData)->OpCode != EFI_IFR_FORM_OP) {
       continue;
     }
     Form = (EFI_IFR_FORM *) OpCodeData;
     InTheForm=1;
-    while ((UINTN) (OpCodeData = (EFI_IFR_OP_HEADER *) ((UINTN) OpCodeData + OpCodeData->Length)) < (UINTN) mFormSet + mFormSetSize) {
+    while ((UINTN) (OpCodeData = (EFI_IFR_OP_HEADER *) ((UINTN) OpCodeData + OpCodeData->Length)) < (UINTN) FormSet + FormSetSize) {
       if (OpCodeData->Scope) {
         InTheForm++;
       } else if (OpCodeData->OpCode == EFI_IFR_END_OP) {
@@ -199,7 +294,7 @@ AttributeQuestionFormListInit (
       Status = EFI_OUT_OF_RESOURCES;
       goto Done;
     }
-    InsertTailList(&mFormList, &NodeOfForm->Link);
+    InsertTailList(FormList, &NodeOfForm->Link);
     NodeOfForm->Signature = FORM_NODE_SIGNATURE;
     NodeOfForm->Form      = Form;
     NodeOfForm->FormSize  = (UINTN) OpCodeData + OpCodeData->Length - (UINTN) Form;
@@ -208,7 +303,7 @@ AttributeQuestionFormListInit (
   Status = EFI_SUCCESS;
 Done:
   if (EFI_ERROR (Status)) {
-    BASE_LIST_FOR_EACH_SAFE(Link, NextLink, &mFormList) {
+    BASE_LIST_FOR_EACH_SAFE(Link, NextLink, FormList) {
       NodeOfForm = CR(Link, FORM_NODE, Link, FORM_NODE_SIGNATURE);
       RemoveEntryList(&NodeOfForm->Link);
       FreePool(NodeOfForm);
@@ -220,45 +315,64 @@ Done:
 
 FORM_NODE *
 AttributeQuestionGetForm (
+  IN      CONST EFI_GUID                *FormSetId,
   IN      CONST UINT16                  FormId
 ) {
-  FORM_NODE                             *NodeOfForm = NULL;
+  FORMSET_NODE                          *NodeOfFormSet  = NULL;
+  FORM_NODE                             *NodeOfForm     = NULL;
   LIST_ENTRY                            *Link;
   LIST_ENTRY                            *NextLink;
 
-  BASE_LIST_FOR_EACH_SAFE(Link, NextLink, &mFormList) {
+  NodeOfFormSet = AttributeQuestionGetFormSet(NULL, FormSetId);
+  if (!NodeOfFormSet) {
+    goto Done;
+  }
+
+  BASE_LIST_FOR_EACH_SAFE(Link, NextLink, &NodeOfFormSet->FormList) {
     NodeOfForm = CR(Link, FORM_NODE, Link, FORM_NODE_SIGNATURE);
     if (NodeOfForm->Form->FormId == FormId) {
       break;
     }
   }
+
+Done:
   return NodeOfForm;
 }
 
 BOOLEAN
 AttributeQuestionIsFirstForm (
+  IN      CONST EFI_GUID                *FormSetId,
   IN      CONST UINT16                  FormId
 ) {
-  FORM_NODE                             *NodeOfForm;
+  FORMSET_NODE                          *NodeOfFormSet  = NULL;
+  FORM_NODE                             *NodeOfForm     = NULL;
 
-  if (IsListEmpty(&mFormList)) {
+  NodeOfFormSet = AttributeQuestionGetFormSet(NULL, FormSetId);
+  if (!NodeOfFormSet) {
+    goto Done;
+  }
+  if (IsListEmpty(&NodeOfFormSet->FormList)) {
     return TRUE;
   }
-  NodeOfForm = CR(mFormList.ForwardLink, FORM_NODE, Link, FORM_NODE_SIGNATURE);
+  NodeOfForm = CR(NodeOfFormSet->FormList.ForwardLink, FORM_NODE, Link, FORM_NODE_SIGNATURE);
   if (FormId == NodeOfForm->Form->FormId) {
     return TRUE;
   }
 
+Done:
   return FALSE;
 }
 
 EFI_STATUS
 AttributeQuestionListInit (
-  IN      CONST EFI_HII_HANDLE          HiiHandle,
-  IN OUT EFI_GUID                       *FormSetGuid
+  IN            FORMSET_NODE            *RootNodeOfFormSet,
+  IN            EFI_HII_HANDLE           ThisHiiHandle,
+  IN            EFI_GUID                *ThisFormSetId
 ) {
   EFI_STATUS                            Status;
+  FORMSET_NODE                          *ThisNodeOfFormSet;
   FORM_NODE                             *NodeOfForm;
+  AQ_GOTO                               *NodeOfGoto;
   EFI_IFR_QUESTION_HEADER               *Question;
   EFI_IFR_OP_HEADER                     *OpCodeData;
   AQ_NODE                               *AttributeQuestion;
@@ -266,30 +380,29 @@ AttributeQuestionListInit (
   LIST_ENTRY                            *NextLink;
   BOOLEAN                               FirstFormHasBeenGot;
   EFI_IFR_FORM                          *FirstForm;
+  EFI_HII_HANDLE                        NextThisHiiHandle;
+  EFI_GUID                              *NextThisFormSetId;
 
   DEBUG ((DEBUG_VERBOSE, "%a().+\n", __FUNCTION__));
 
-  Status = AttributeQuestionLoadFormSet(HiiHandle, FormSetGuid);
-  if (EFI_ERROR (Status)) {
-    goto Done;
+  if (!(ThisHiiHandle && ThisFormSetId)) {
+    //
+    // reset mGotoTmpList for new form list
+    //
+    BASE_LIST_FOR_EACH_SAFE(Link, NextLink, &mGotoTmpList) {
+      NodeOfGoto = CR(Link, AQ_GOTO, Link, AQ_GOTO_SIGNATURE);
+      RemoveEntryList(&NodeOfGoto->Link);
+      FreePool(NodeOfGoto);
+    }
+    ThisHiiHandle = RootNodeOfFormSet->HiiHandle;
+    ThisFormSetId =&RootNodeOfFormSet->FormSet->Guid;
   }
-  Status = AttributeQuestionFormListInit();
-  if (EFI_ERROR (Status)) {
-    goto Done;
-  }
-  //
-  // reset gAttributeQuestionList for attribute question list
-  //
-  BASE_LIST_FOR_EACH_SAFE(Link, NextLink, &gAttributeQuestionList) {
-    AttributeQuestion = CR(Link, AQ_NODE, Link, AQ_NODE_SIGNATURE);
-    RemoveEntryList(&AttributeQuestion->Link);
-    FreePool(AttributeQuestion);
-  }
+  ThisNodeOfFormSet = AttributeQuestionGetFormSet(NULL, ThisFormSetId);
   //
   // for each attribute question in this each form
   //
   FirstFormHasBeenGot = FALSE;
-  BASE_LIST_FOR_EACH_SAFE(Link, NextLink, &mFormList) {
+  BASE_LIST_FOR_EACH_SAFE(Link, NextLink, &ThisNodeOfFormSet->FormList) {
     NodeOfForm = CR(Link, FORM_NODE, Link, FORM_NODE_SIGNATURE);
     if (!FirstFormHasBeenGot) {
       FirstForm = NodeOfForm->Form;
@@ -311,14 +424,26 @@ AttributeQuestionListInit (
           goto Done;
         }
         InsertTailList(&gAttributeQuestionList, &AttributeQuestion->Link);
-        AttributeQuestion->Signature  = AQ_NODE_SIGNATURE;
-        AttributeQuestion->Handle     = HiiHandle;
-        AttributeQuestion->Fid        = FirstForm->FormId;
-        AttributeQuestion->Qid        = Question->QuestionId;
-        AttributeQuestion->Title[0]   = mFormSet->FormSetTitle;
-        AttributeQuestion->Title[1]   = FirstForm->FormTitle;
-        AttributeQuestion->Prompt     = Question->Header.Prompt;
+        AttributeQuestion->Signature          = AQ_NODE_SIGNATURE;
+        AttributeQuestion->RootHiiHandle      = RootNodeOfFormSet->HiiHandle;
+        AttributeQuestion->RootFormSetId      =&RootNodeOfFormSet->FormSet->Guid;
+        AttributeQuestion->RootFormId         = FirstForm->FormId;
+        AttributeQuestion->ThisHiiHandle      = ThisHiiHandle;
+        AttributeQuestion->ThisFormSetId      = ThisFormSetId;
+        AttributeQuestion->QuestionId         = Question->QuestionId;
+        AttributeQuestion->Title[0]           = RootNodeOfFormSet->FormSet->FormSetTitle;
+        AttributeQuestion->Title[1]           = FirstForm->FormTitle;
+        AttributeQuestion->Prompt             = Question->Header.Prompt;
         InitializeListHead(&AttributeQuestion->GotoList);
+      } else if (OpCodeData->OpCode == EFI_IFR_REF_OP) {
+        if (OpCodeData->Length >= sizeof(EFI_IFR_REF3)) {
+          NextThisFormSetId = &((EFI_IFR_REF3*) OpCodeData)->FormSetId;
+          NextThisHiiHandle = AttributeQuestionGetHiiHandle(NextThisFormSetId);
+          Status = AttributeQuestionListInit(RootNodeOfFormSet, NextThisHiiHandle, NextThisFormSetId);
+          if (Status == EFI_OUT_OF_RESOURCES) {
+            goto Done;
+          }
+        }
       }
     }
   }
@@ -342,10 +467,15 @@ DebugGotoNode (
 ) {
   DEBUG ((DEBUG_INFO, "@AQ_GOTO:\n"));
   DEBUG ((DEBUG_INFO,
-    "  Id    : %04x\n"
-    "  Title : %04x\n"
-    "  Depth : %u\n",
-    NodeOfGoto->FormId, NodeOfGoto->Title, NodeOfGoto->Depth
+    "  FormSetId      : %g\n"
+    "  FormId         : %04x\n"
+    "  Title[0]       : %s\n"
+    "  Title[1]       : %s\n"
+    "  Depth          : %u\n",
+    NodeOfGoto->FormSetId, NodeOfGoto->FormId,
+    HiiGetString(NodeOfGoto->HiiHandle[0], NodeOfGoto->Title[0], NULL),
+    HiiGetString(NodeOfGoto->HiiHandle[1], NodeOfGoto->Title[1], NULL),
+    NodeOfGoto->Depth
     ));
 }
 
@@ -360,60 +490,85 @@ AttributeQuestionPrint (
 
   ZeroMem(Url, sizeof(Url));
   StrCatS(Url, QUESTION_URL_LENGTH, QUESTION_URL_SLASH);
-  StrCatS(Url, QUESTION_URL_LENGTH, HiiGetString(AttributeQuestion->Handle, AttributeQuestion->Title[0], NULL));
+  StrCatS(Url, QUESTION_URL_LENGTH, HiiGetString(AttributeQuestion->RootHiiHandle, AttributeQuestion->Title[0], NULL));
   StrCatS(Url, QUESTION_URL_LENGTH, QUESTION_URL_SLASH);
-  StrCatS(Url, QUESTION_URL_LENGTH, HiiGetString(AttributeQuestion->Handle, AttributeQuestion->Title[1], NULL));
+  StrCatS(Url, QUESTION_URL_LENGTH, HiiGetString(AttributeQuestion->RootHiiHandle, AttributeQuestion->Title[1], NULL));
   StrCatS(Url, QUESTION_URL_LENGTH, QUESTION_URL_SLASH);
   BASE_LIST_FOR_EACH_SAFE(Link, NextLink, &AttributeQuestion->GotoList) {
     NodeOfGoto = CR(Link, AQ_GOTO, Link, AQ_GOTO_SIGNATURE);
-    StrCatS(Url, QUESTION_URL_LENGTH, HiiGetString(AttributeQuestion->Handle, NodeOfGoto->Title, NULL));
+    StrCatS(Url, QUESTION_URL_LENGTH, HiiGetString(NodeOfGoto->HiiHandle[0], NodeOfGoto->Title[0], NULL));
+    StrCatS(Url, QUESTION_URL_LENGTH, QUESTION_URL_SLASH);
+    StrCatS(Url, QUESTION_URL_LENGTH, HiiGetString(NodeOfGoto->HiiHandle[1], NodeOfGoto->Title[1], NULL));
     StrCatS(Url, QUESTION_URL_LENGTH, QUESTION_URL_SLASH);
   }
-  StrCatS(Url, QUESTION_URL_LENGTH, HiiGetString(AttributeQuestion->Handle, AttributeQuestion->Prompt, NULL));
+  StrCatS(Url, QUESTION_URL_LENGTH, HiiGetString(AttributeQuestion->ThisHiiHandle, AttributeQuestion->Prompt, NULL));
   DEBUG((DEBUG_INFO, "Url: %s\n", Url));
 }
 
 EFI_STATUS
 AttributeQuestionGoThruForm (
-  IN      CONST UINT16                  QuestionId,
-  IN      CONST UINT16                  FormId
+  IN            AQ_NODE                 *AttributeQuestion,
+  IN            EFI_HII_HANDLE          LastGotoHandle,
+  IN            UINT16                  LastGotoPrompt,
+  IN            FORMSET_NODE            *LastNodeOfFormSet,
+  IN            UINT16                  LastFormId
 ) {
   EFI_STATUS                            Status;
-  FORM_NODE                             *NodeOfForm;
+  FORMSET_NODE                          *NextNodeOfFormSet;
+  FORM_NODE                             *LastNodeOfForm;
   EFI_IFR_QUESTION_HEADER               *Question;
   EFI_IFR_OP_HEADER                     *OpCodeData;
-  AQ_NODE                               *AttributeQuestion;
   LIST_ENTRY                            *Link;
   LIST_ENTRY                            *NextLink;
   AQ_GOTO                               *NodeOfGoto;
+  EFI_HII_HANDLE                        NextGotoHandle;
+  UINT16                                NextGotoPrompt;
 
-  DEBUG ((DEBUG_INFO, "%a().+ FormId = %04x\n", __FUNCTION__, FormId));
-
-  AttributeQuestion = AttributeQuestionGetSelf(QuestionId);
-  if (!AttributeQuestion) {
-    Status = EFI_INVALID_PARAMETER;
-    goto Done;
-  }
-
-  if (!FormId) {
-    if (!IsListEmpty(&mFormList)) {
-      NodeOfForm = CR(mFormList.ForwardLink, FORM_NODE, Link, FORM_NODE_SIGNATURE);
-    } else {
-      //
-      // call AttributeQuestionListInit before AttributeQuestionGoThruForm
-      //
+  DEBUG ((DEBUG_INFO, "%a().+ LastFormId = %04x\n", __FUNCTION__, LastFormId));
+  //
+  // resolve LastNodeOfFormSet and LastNodeOfForm
+  //
+  if (!LastNodeOfFormSet) {
+    //
+    // if no LastNodeOfFormSet, AttributeQuestion->Root* as last
+    //
+    LastNodeOfFormSet = AttributeQuestionGetFormSet(AttributeQuestion->RootHiiHandle, AttributeQuestion->RootFormSetId);
+    if (!LastNodeOfFormSet) {
       Status = EFI_NOT_READY;
       goto Done;
     }
+    //
+    // if no LastFormId, 1st form from LastNodeOfFormSet->FormList as last
+    //
+    if (!LastFormId) {
+      if (!IsListEmpty(&LastNodeOfFormSet->FormList)) {
+        LastNodeOfForm = CR(LastNodeOfFormSet->FormList.ForwardLink, FORM_NODE, Link, FORM_NODE_SIGNATURE);
+      } else {
+        Status = EFI_NOT_READY;
+        goto Done;
+      }
+    }
   } else {
-    NodeOfForm = AttributeQuestionGetForm(FormId);
     //
-    // goto each other as success and return
+    // get the right LastNodeOfForm from NodeOfFormSet->FormList
     //
-    BASE_LIST_FOR_EACH_SAFE(Link, NextLink, &mGotoList) {
-      NodeOfGoto = CR(Link, AQ_GOTO, Link, AQ_GOTO_SIGNATURE);
-      if (FormId == NodeOfGoto->FormId) {
-        Status = EFI_SUCCESS;
+    if (!LastFormId) {
+      if (!IsListEmpty(&LastNodeOfFormSet->FormList)) {
+        LastNodeOfForm = CR(LastNodeOfFormSet->FormList.ForwardLink, FORM_NODE, Link, FORM_NODE_SIGNATURE);
+      } else {
+        Status = EFI_NOT_READY;
+        goto Done;
+      }
+    } else {
+      LastNodeOfForm = NULL;
+      BASE_LIST_FOR_EACH_SAFE(Link, NextLink, &LastNodeOfFormSet->FormList) {
+        LastNodeOfForm = CR(Link, FORM_NODE, Link, FORM_NODE_SIGNATURE);
+        if (LastNodeOfForm->Form->FormId == LastFormId) {
+          break;
+        }
+      }
+      if (!LastNodeOfForm) {
+        Status = EFI_NOT_READY;
         goto Done;
       }
     }
@@ -425,59 +580,107 @@ AttributeQuestionGoThruForm (
       Status = EFI_OUT_OF_RESOURCES;
       goto Done;
     }
-    InsertTailList(&mGotoList, &NodeOfGoto->Link);
-    NodeOfGoto->Signature = AQ_GOTO_SIGNATURE;
-    NodeOfGoto->FormId    = NodeOfForm->Form->FormId;
-    NodeOfGoto->Title     = NodeOfForm->Form->FormTitle;
-    if (IsNodeAtEnd(&mGotoList, mGotoList.ForwardLink)) {
+    InsertTailList(&mGotoTmpList, &NodeOfGoto->Link);
+    NodeOfGoto->Signature     = AQ_GOTO_SIGNATURE;
+    NodeOfGoto->FormSetId     = &LastNodeOfFormSet->FormSet->Guid;
+    NodeOfGoto->FormId        = LastNodeOfForm->Form->FormId;
+    NodeOfGoto->HiiHandle[0]  = LastGotoHandle;
+    NodeOfGoto->HiiHandle[1]  = AttributeQuestionGetHiiHandle(NodeOfGoto->FormSetId);
+    NodeOfGoto->Title[0]      = LastGotoPrompt;
+    NodeOfGoto->Title[1]      = LastNodeOfForm->Form->FormTitle;
+    if (IsNodeAtEnd(&mGotoTmpList, mGotoTmpList.ForwardLink)) {
       NodeOfGoto->Depth = 1;
     } else {
       NodeOfGoto->Depth = (CR(NodeOfGoto->Link.BackLink, AQ_GOTO, Link, AQ_GOTO_SIGNATURE))->Depth + 1;
     }
     DebugGotoNode(NodeOfGoto);
     //
-    // skip first form after create mGotoList node
+    // in case of goto each other: as success and return
     //
-    if (AttributeQuestionIsFirstForm(FormId)) {
-      Status = EFI_SUCCESS;
-      goto Done;
+    BASE_LIST_FOR_EACH_SAFE(Link, NextLink, &mGotoTmpList) {
+      NodeOfGoto = CR(Link, AQ_GOTO, Link, AQ_GOTO_SIGNATURE);
+      if (!IsNodeAtEnd(&mGotoTmpList, &NodeOfGoto->Link)) {
+        if ((NodeOfGoto->FormId == LastFormId) && (NodeOfGoto->FormSetId == &LastNodeOfFormSet->FormSet->Guid)) {
+          Status = EFI_SUCCESS;
+          goto Done;
+        }
+      }
+    }
+    if (AttributeQuestion->RootFormSetId == &LastNodeOfFormSet->FormSet->Guid) {
+      if (AttributeQuestionIsFirstForm(&LastNodeOfFormSet->FormSet->Guid, LastFormId)) {
+        Status = EFI_SUCCESS;
+        goto Done;
+      }
     }
   }
-  OpCodeData = (EFI_IFR_OP_HEADER *) NodeOfForm->Form;
-  while ((UINTN) (OpCodeData = (EFI_IFR_OP_HEADER *) ((UINTN) OpCodeData + OpCodeData->Length)) < (UINTN) NodeOfForm->Form + NodeOfForm->FormSize) {
-    if (AttributeQuestionIsOp(OpCodeData->OpCode)) {
+  OpCodeData = (EFI_IFR_OP_HEADER *) LastNodeOfForm->Form;
+  while ((UINTN) (OpCodeData = (EFI_IFR_OP_HEADER *) ((UINTN) OpCodeData + OpCodeData->Length)) < (UINTN) LastNodeOfForm->Form + LastNodeOfForm->FormSize) {
+    if (CompareGuid(AttributeQuestion->ThisFormSetId, &LastNodeOfFormSet->FormSet->Guid)) {
       //
-      // for each attribute question
+      // search question or goto form
       //
-      Question = (EFI_IFR_QUESTION_HEADER *) &((EFI_IFR_REF5 *) OpCodeData)->Question;
-      if (QuestionId == Question->QuestionId) {
-        Status = EFI_SUCCESS;
+      if (AttributeQuestionIsOp(OpCodeData->OpCode)) {
         //
-        // insert mGotoList to attribute question goto list
+        // for each attribute question
         //
-        BASE_LIST_FOR_EACH_SAFE(Link, NextLink, &mGotoList) {
-          NodeOfGoto = AllocateCopyPool(sizeof(AQ_GOTO), CR(Link, AQ_GOTO, Link, AQ_GOTO_SIGNATURE));
-          if (!NodeOfGoto) {
-            Status = EFI_OUT_OF_RESOURCES;
-            break;
+        Question = (EFI_IFR_QUESTION_HEADER *) &((EFI_IFR_REF5 *) OpCodeData)->Question;
+        if (AttributeQuestion->QuestionId == Question->QuestionId) {
+          Status = EFI_SUCCESS;
+          //
+          // insert mGotoTmpList to attribute question goto list
+          //
+          BASE_LIST_FOR_EACH_SAFE(Link, NextLink, &mGotoTmpList) {
+            NodeOfGoto = AllocateCopyPool(sizeof(AQ_GOTO), CR(Link, AQ_GOTO, Link, AQ_GOTO_SIGNATURE));
+            if (!NodeOfGoto) {
+              Status = EFI_OUT_OF_RESOURCES;
+              break;
+            }
+            InsertTailList(&AttributeQuestion->GotoList, &NodeOfGoto->Link);
           }
-          InsertTailList(&AttributeQuestion->GotoList, &NodeOfGoto->Link);
+          goto Done;
         }
-        goto Done;
+      } else if (OpCodeData->OpCode == EFI_IFR_REF_OP) {
+        if (OpCodeData->Length < sizeof(EFI_IFR_REF3)) {
+          NextGotoHandle    = LastNodeOfFormSet->HiiHandle;
+          NextGotoPrompt    = ((EFI_IFR_REF *) OpCodeData)->Question.Header.Prompt;
+          Status = AttributeQuestionGoThruForm(AttributeQuestion, NextGotoHandle, NextGotoPrompt, LastNodeOfFormSet, ((EFI_IFR_REF *) OpCodeData)->FormId);
+          //
+          // pop last NodeOfGoto
+          //
+          Link = mGotoTmpList.BackLink;
+          if (IsNodeAtEnd(&mGotoTmpList, Link)) {
+            NodeOfGoto = CR(Link, AQ_GOTO, Link, AQ_GOTO_SIGNATURE);
+            RemoveEntryList(&NodeOfGoto->Link);
+            FreePool(NodeOfGoto);
+          }
+          if (Status == EFI_OUT_OF_RESOURCES) {
+            goto Done;
+          }
+        }
       }
-    } else if (OpCodeData->OpCode == EFI_IFR_REF_OP) {
+    } else {
       //
-      // for goto form
+      // just goto formset
       //
-      Status = AttributeQuestionGoThruForm(QuestionId, ((EFI_IFR_REF *) OpCodeData)->FormId);
-      Link   = mGotoList.BackLink;
-      if (IsNodeAtEnd(&mGotoList, Link)) {
-        NodeOfGoto = CR(Link, AQ_GOTO, Link, AQ_GOTO_SIGNATURE);
-        RemoveEntryList(&NodeOfGoto->Link);
-        FreePool(NodeOfGoto);
-      }
-      if (Status == EFI_OUT_OF_RESOURCES) {
-        goto Done;
+      if (OpCodeData->OpCode == EFI_IFR_REF_OP) {
+        if (OpCodeData->Length >= sizeof(EFI_IFR_REF3)) {
+          NextGotoHandle    = LastNodeOfFormSet->HiiHandle;
+          NextGotoPrompt    = ((EFI_IFR_REF *) OpCodeData)->Question.Header.Prompt;
+          NextNodeOfFormSet = AttributeQuestionGetFormSet(NULL, &((EFI_IFR_REF3 *) OpCodeData)->FormSetId);
+          Status = AttributeQuestionGoThruForm(AttributeQuestion, NextGotoHandle, NextGotoPrompt, NextNodeOfFormSet, 0);
+          //
+          // pop last NodeOfGoto
+          //
+          Link = mGotoTmpList.BackLink;
+          if (IsNodeAtEnd(&mGotoTmpList, Link)) {
+            NodeOfGoto = CR(Link, AQ_GOTO, Link, AQ_GOTO_SIGNATURE);
+            RemoveEntryList(&NodeOfGoto->Link);
+            FreePool(NodeOfGoto);
+          }
+          if (Status == EFI_OUT_OF_RESOURCES) {
+            goto Done;
+          }
+        }
       }
     }
   }
@@ -494,7 +697,7 @@ Done:
       FreePool(NodeOfGoto);
     }
 
-    BASE_LIST_FOR_EACH_SAFE(Link, NextLink, &mGotoList) {
+    BASE_LIST_FOR_EACH_SAFE(Link, NextLink, &mGotoTmpList) {
       NodeOfGoto = CR(Link, AQ_GOTO, Link, AQ_GOTO_SIGNATURE);
       RemoveEntryList(&NodeOfGoto->Link);
       FreePool(NodeOfGoto);
@@ -510,28 +713,36 @@ DebugAttributeQuestion (
 ) {
   DEBUG ((DEBUG_INFO, "@AQ_NODE:\n"));
   DEBUG ((DEBUG_INFO,
-    "  Handle       : %08p\n"
-    "  Fid          : %04x\n"
-    "  Qid          : %04x\n"
+    "  RootHiiHandle: %08p\n"
+    "  RootFormSetId: %g\n"
+    "  ThisHiiHandle: %08p\n"
+    "  ThisFormSetId: %g\n"
+    "  RootFormId   : %04x\n"
+    "  QuestionId   : %04x\n",
+    AttributeQuestion->RootHiiHandle, AttributeQuestion->RootFormSetId,
+    AttributeQuestion->ThisHiiHandle, AttributeQuestion->ThisFormSetId,
+    AttributeQuestion->RootFormId,    AttributeQuestion->QuestionId
+    ));
+  DEBUG ((DEBUG_INFO,
     "  Title[0]     : %s\n"
     "  Title[1]     : %s\n"
     "  Prompt       : %s\n",
-    AttributeQuestion->Handle, AttributeQuestion->Fid, AttributeQuestion->Qid,
-    HiiGetString(AttributeQuestion->Handle, AttributeQuestion->Title[0], NULL),
-    HiiGetString(AttributeQuestion->Handle, AttributeQuestion->Title[1], NULL),
-    HiiGetString(AttributeQuestion->Handle, AttributeQuestion->Prompt  , NULL)
+    HiiGetString(AttributeQuestion->RootHiiHandle, AttributeQuestion->Title[0], NULL),
+    HiiGetString(AttributeQuestion->RootHiiHandle, AttributeQuestion->Title[1], NULL),
+    HiiGetString(AttributeQuestion->RootHiiHandle, AttributeQuestion->Prompt  , NULL)
     ));
 }
 
 EFI_STATUS
 AttributeQuestionInit (
   IN     EFI_HII_HANDLE                 HiiHandle,
-  IN OUT EFI_GUID                       *FormSetGuid
+  IN OUT EFI_GUID                       *FormSetId
 ) {
   //
   // for one formset
   //
   EFI_STATUS                            Status;
+  FORMSET_NODE                          *NodeOfFormSet;
   AQ_NODE                               *AttributeQuestion;
   LIST_ENTRY                            *Link;
   LIST_ENTRY                            *NextLink;
@@ -542,9 +753,21 @@ AttributeQuestionInit (
   //
   AttributeQuestionFree();
   //
+  // Load Formset 1st
+  //
+  Status = AttributeQuestionFormSetRegisterAll();
+  if (EFI_ERROR (Status)) {
+    goto Done;
+  }
+  NodeOfFormSet = AttributeQuestionGetFormSet(HiiHandle, FormSetId);
+  if (!NodeOfFormSet) {
+    Status = EFI_NOT_FOUND;
+    goto Done;
+  }
+  //
   // 1st stage init
   //
-  Status = AttributeQuestionListInit(HiiHandle, FormSetGuid);
+  Status = AttributeQuestionListInit(NodeOfFormSet, NULL, NULL);
   if (EFI_ERROR (Status)) {
     goto Done;
   }
@@ -554,12 +777,16 @@ AttributeQuestionInit (
   BASE_LIST_FOR_EACH_SAFE(Link, NextLink, &gAttributeQuestionList) {
     AttributeQuestion = CR(Link, AQ_NODE, Link, AQ_NODE_SIGNATURE);
     DebugAttributeQuestion(AttributeQuestion);
-    Status = AttributeQuestionGoThruForm(AttributeQuestion->Qid, 0);
+    Status = AttributeQuestionGoThruForm(AttributeQuestion, NULL, 0, NULL, 0);
+    if (EFI_ERROR (Status) && Status != EFI_UNSUPPORTED) {
+      goto Done;
+    }
     AttributeQuestionPrint(AttributeQuestion);
   }
 
+  Status = EFI_SUCCESS;
 Done:
-  if (Status == EFI_OUT_OF_RESOURCES) {
+  if (EFI_ERROR (Status)) {
     AttributeQuestionFree();
   }
   DEBUG ((DEBUG_INFO, "%a().- Status = %r\n", __FUNCTION__, Status));
@@ -568,6 +795,8 @@ Done:
 
 AQ_NODE *
 AttributeQuestionGetSelf (
+  IN      CONST EFI_GUID                *RootFormSetId,
+  IN      CONST EFI_GUID                *ThisFormSetId,
   IN      CONST UINT16                  QuestionId
 ) {
   AQ_NODE                               *AttributeQuestion = NULL;
@@ -576,7 +805,9 @@ AttributeQuestionGetSelf (
 
   BASE_LIST_FOR_EACH_SAFE(Link, NextLink, &gAttributeQuestionList) {
     AttributeQuestion = CR(Link, AQ_NODE, Link, AQ_NODE_SIGNATURE);
-    if (AttributeQuestion->Qid == QuestionId) {
+    if ((AttributeQuestion->QuestionId == QuestionId) &&
+        CompareGuid(AttributeQuestion->RootFormSetId, RootFormSetId) &&
+        CompareGuid(AttributeQuestion->ThisFormSetId, ThisFormSetId)) {
       break;
     }
   }
@@ -592,23 +823,14 @@ AttributeQuestionFree (
   LIST_ENTRY                            *NextLink0;
   LIST_ENTRY                            *Link1;
   LIST_ENTRY                            *NextLink1;
-  FORM_NODE                             *NodeOfForm;
   AQ_GOTO                               *NodeOfGoto;
   //
-  // free mGotoList
+  // free mGotoTmpList
   //
-  BASE_LIST_FOR_EACH_SAFE(Link0, NextLink0, &mGotoList) {
+  BASE_LIST_FOR_EACH_SAFE(Link0, NextLink0, &mGotoTmpList) {
     NodeOfGoto = CR(Link0, AQ_GOTO, Link, AQ_GOTO_SIGNATURE);
     RemoveEntryList(&NodeOfGoto->Link);
     FreePool(NodeOfGoto);
-  }
-  //
-  // free mFormList
-  //
-  BASE_LIST_FOR_EACH_SAFE(Link0, NextLink0, &mFormList) {
-    NodeOfForm = CR(Link0, FORM_NODE, Link, FORM_NODE_SIGNATURE);
-    RemoveEntryList(&NodeOfForm->Link);
-    FreePool(NodeOfForm);
   }
   //
   // free gAttributeQuestionList
@@ -622,13 +844,5 @@ AttributeQuestionFree (
     }
     RemoveEntryList(&AttributeQuestion->Link);
     FreePool(AttributeQuestion);
-  }
-  //
-  // free mFormSet
-  //
-  if (mFormSet) {
-    FreePool(mFormSet);
-    mFormSet  = NULL;
-    mFormSetSize = 0;
   }
 }

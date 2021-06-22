@@ -1,0 +1,44 @@
+/** @file
+  Copyright ©2021 Liu Yi, efikarl@yeah.net
+
+  This program is just made available under the terms and conditions of the
+  MIT license: http://www.efikarl.com/mit-license.html
+
+  THE PROGRAM IS DISTRIBUTED UNDER THE MIT LICENSE ON AN "AS IS" BASIS,
+  WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
+--*/
+#include "Formset1.vfr.h"
+#include "Formset2.vfr.h"
+
+formset
+  guid    = FORMSET2_GUID,
+  title   = STRING_TOKEN(STR_SAMPLE_FORMSET2_TITLE),
+  help    = STRING_TOKEN(STR_SAMPLE_FORMSET2_HELP),
+
+  efivarstore   FORMSET1_SETUP_TYPE_VARSTORE_EFI,
+    varid     = FORMSET1_VARID_TYPE_VARSTORE_EFI,
+    attribute = EFI_VARIABLE_BOOTSERVICE_ACCESS | EFI_VARIABLE_NON_VOLATILE,
+    name      = Formset1SetupVarstoreEfi,
+    guid      = FORMSET1_GUID;
+
+  form formid = FORM1, title = STRING_TOKEN(STR_SAMPLE_FORM1_TITLE);
+
+    text help = STRING_TOKEN(STR_TEXT_HELP), text = STRING_TOKEN(STR_WHO_I_AM), text = STRING_TOKEN(STR_I_AM_WHO);
+
+    checkbox
+      varid   = Formset1SetupVarstoreEfi.Bit0,
+      prompt  = STRING_TOKEN(STR_QID_UNIQUE_PROMPT),
+      help    = STRING_TOKEN(STR_QID_UNIQUE_HELP),
+      flags   = CHECKBOX_DEFAULT,
+    endcheckbox;
+
+    checkbox
+      varid   = Formset1SetupVarstoreEfi.Bit1,
+      prompt  = STRING_TOKEN(STR_QID_UNIQUE_PROMPT),
+      help    = STRING_TOKEN(STR_QID_UNIQUE_HELP),
+      flags   = CHECKBOX_DEFAULT,
+    endcheckbox;
+
+  endform;
+
+endformset;

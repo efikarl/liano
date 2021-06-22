@@ -14,8 +14,6 @@
 
 #define FORMSET1_GUID { 0x6011d16f, 0xc329, 0x2543, { 0xaa, 0xf6, 0x07, 0x22, 0xc3, 0xbf, 0xfa, 0x56 } }
 
-#define FORMSET1_VARID                                1
-
 #define FORM1                                         1
 
 #define FORM2                                         2

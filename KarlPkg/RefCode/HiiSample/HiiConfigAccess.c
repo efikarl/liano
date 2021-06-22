@@ -9,7 +9,6 @@
 --*/
 
 #include "HiiSample.h"
-#include "Formset1.h"
 
 VOID
 DebugRequest (

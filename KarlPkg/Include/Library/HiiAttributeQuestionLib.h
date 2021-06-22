@@ -19,19 +19,24 @@
 #define AQ_GOTO_SIGNATURE               SIGNATURE_32 ('A', 'Q', 'G', 'T')
 
 typedef struct {
-  UINTN                                 Signature;
+  UINT32                                Signature;
   LIST_ENTRY                            Link;
+  EFI_GUID                             *FormSetId;
   UINT16                                FormId;
-  EFI_STRING_ID                         Title;
+  EFI_HII_HANDLE                        HiiHandle[2];
+  EFI_STRING_ID                         Title[2];
   UINTN                                 Depth;
 } AQ_GOTO;
 
 typedef struct {
-  UINTN                                 Signature;
-  EFI_HII_HANDLE                        Handle;
-  UINT16                                Fid;
-  UINT16                                Qid;
-  EFI_STRING_ID                         Title[2];     // 0 for formset, 1 for 1st form
+  UINT32                                Signature;
+  EFI_HII_HANDLE                        RootHiiHandle;
+  EFI_GUID                             *RootFormSetId;
+  EFI_HII_HANDLE                        ThisHiiHandle;
+  EFI_GUID                             *ThisFormSetId;
+  UINT16                                RootFormId;
+  UINT16                                QuestionId;
+  EFI_STRING_ID                         Title[2];     // 0 for root formset, 1 for root form
   EFI_STRING_ID                         Prompt;
   LIST_ENTRY                            Link;
   LIST_ENTRY                            GotoList;
@@ -40,11 +45,13 @@ typedef struct {
 EFI_STATUS
 AttributeQuestionInit (
   IN     EFI_HII_HANDLE                 HiiHandle,
-  IN OUT EFI_GUID                       *FormSetGuid
+  IN OUT EFI_GUID                       *FormSetId
 );
 
 AQ_NODE *
 AttributeQuestionGetSelf (
+  IN      CONST EFI_GUID                *RootFormSetId,
+  IN      CONST EFI_GUID                *ThisFormSetId,
   IN      CONST UINT16                  QuestionId
 );
 
