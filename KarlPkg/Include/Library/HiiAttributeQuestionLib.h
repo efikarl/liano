@@ -11,35 +11,38 @@
 #define _HII_ATTRIBUTE_QUESTION_LIB_H_
 #include <Uefi.h>
 
-#define QUESTION_URL_LENGTH             512
+//
+// assume that:
+// 1. one package one hii handle, if not, get the first one
+// 2. one form just be goto once, if not, get the short one
+//
+#define QUESTION_URL_LENGTH             256
 #define QUESTION_URL_SLASH              L"/"
-#define MAX_GOTO_LIST                   4
 
 #define AQ_NODE_SIGNATURE               SIGNATURE_32 ('A', 'Q', 'N', 'D')
-#define AQ_GOTO_SIGNATURE               SIGNATURE_32 ('A', 'Q', 'G', 'T')
+
+typedef enum {
+  AQ_QUESTION,
+  AQ_REF_FORM,
+  AQ_REF_FSET,
+} AQ_TYPE;
 
 typedef struct {
-  UINT32                                Signature;
-  LIST_ENTRY                            Link;
+  EFI_HII_HANDLE                        HiiHandle;
   EFI_GUID                             *FormSetId;
+  EFI_STRING_ID                         FormSetTitle;
   UINT16                                FormId;
-  EFI_HII_HANDLE                        HiiHandle[2];
-  EFI_STRING_ID                         Title[2];
-  UINTN                                 Depth;
-} AQ_GOTO;
+  EFI_STRING_ID                         FormTitle;
+} AQ_PAGE;
 
 typedef struct {
   UINT32                                Signature;
-  EFI_HII_HANDLE                        RootHiiHandle;
-  EFI_GUID                             *RootFormSetId;
-  EFI_HII_HANDLE                        ThisHiiHandle;
-  EFI_GUID                             *ThisFormSetId;
-  UINT16                                RootFormId;
+  AQ_PAGE                               ThisPage;
+  AQ_PAGE                              *PrevPage;
+  AQ_TYPE                               Type;
   UINT16                                QuestionId;
-  EFI_STRING_ID                         Title[2];     // 0 for root formset, 1 for root form
   EFI_STRING_ID                         Prompt;
   LIST_ENTRY                            Link;
-  LIST_ENTRY                            GotoList;
 } AQ_NODE;
 
 EFI_STATUS
@@ -48,10 +51,9 @@ AttributeQuestionInit (
   IN OUT EFI_GUID                       *FormSetId
 );
 
-AQ_NODE *
-AttributeQuestionGetSelf (
-  IN      CONST EFI_GUID                *RootFormSetId,
-  IN      CONST EFI_GUID                *ThisFormSetId,
+CHAR16 *
+AttributeQuestionGetUrl (
+  IN      CONST EFI_GUID                *FormSetId,
   IN      CONST UINT16                  QuestionId
 );
 

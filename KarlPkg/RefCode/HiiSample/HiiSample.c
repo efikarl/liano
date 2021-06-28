@@ -327,7 +327,7 @@ HiiSampleDriverEntryPoint (
   }
 
   AttributeQuestionInit(mPrivateData.Hii.Handle[0], &mFormset1Guid);
-  // AttributeQuestionInit(mPrivateData.Hii.Handle[1], &mFormset2Guid);
+  AttributeQuestionInit(mPrivateData.Hii.Handle[1], &mFormset2Guid);
 
 Done:
   DEBUG ((DEBUG_INFO, "%a().- Status = %r\n", __FUNCTION__, Status));

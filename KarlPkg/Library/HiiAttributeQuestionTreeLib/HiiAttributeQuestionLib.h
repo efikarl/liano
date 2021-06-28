@@ -11,6 +11,8 @@
 #define _HII_ATTRIBUTE_QUESTION_H_
 #include <Uefi.h>
 
+#define DEBUG_THIS                      DEBUG_VERBOSE
+
 #define FORMSET_NODE_SIGNATURE          SIGNATURE_32 ('A', 'Q', 'F', 'S')
 typedef struct {
   UINTN                                 Signature;
@@ -29,17 +31,74 @@ typedef struct {
   UINTN                                 FormSize;
 } FORM_NODE;
 
+#define FORMREF_NODE_SIGNATURE          SIGNATURE_32 ('A', 'Q', 'F', 'R')
+typedef struct {
+  UINTN                                 Signature;
+  LIST_ENTRY                            Link;
+  EFI_GUID                             *FormSetId;
+  UINT16                                FormId;
+} FORMREF_NODE;
+
+#define URL_NODE_SIGNATURE              SIGNATURE_32 ('A', 'Q', 'U', 'N')
+typedef struct {
+  UINTN                                 Signature;
+  LIST_ENTRY                            Link;
+  EFI_HII_HANDLE                        HiiHandle;
+  UINT16                                Name;
+} URL_NODE;
+
+
 EFI_STATUS
-AttributeQuestionFormSetRegister (
-  IN     EFI_HII_HANDLE                 HiiHandle,
-  IN     EFI_GUID                       *FormSetId
+AttributeQuestionFormSetRegisterDepex (
+  IN            EFI_GUID               *FormSetId,
+  IN            EFI_FORM_ID             FormId,
+  IN            BOOLEAN                 ResetGoto
+);
+
+EFI_STATUS
+AttributeQuestionFormSetRegisterDepex (
+  IN            EFI_GUID               *FormSetId,
+  IN            EFI_FORM_ID             FormId,
+  IN            BOOLEAN                 ResetGoto
+);
+
+VOID
+AttributeQuestionFormSetFree (
+  VOID
+);
+
+FORMSET_NODE *
+AttributeQuestionGetFormSet (
+  IN      CONST EFI_GUID               *FormSetId
+);
+
+EFI_HII_HANDLE
+AttributeQuestionGetHiiHandle (
+  IN      CONST EFI_GUID               *FormSetId
 );
 
 EFI_STATUS
 AttributeQuestionFormListInit (
-  IN      CONST EFI_IFR_FORM_SET        *FormSet,
+  IN      CONST EFI_IFR_FORM_SET       *FormSet,
   IN            UINTN                   FormSetSize,
-  IN            LIST_ENTRY              *FormList
+  IN            LIST_ENTRY             *FormList
+);
+
+FORM_NODE *
+AttributeQuestionGetForm (
+  IN      CONST EFI_GUID               *FormSetId,
+  IN      CONST UINT16                  FormId
+);
+
+VOID
+AttributeQuestionPrint (
+  IN      CONST EFI_GUID               *FormSetId,
+  IN      CONST UINT16                  QuestionId
+);
+
+VOID
+DebugAttributeQuestion (
+  AQ_NODE                              *AttributeQuestion
 );
 
 #endif
