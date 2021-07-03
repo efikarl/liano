@@ -145,10 +145,10 @@ done
 #
 # Build or Run OVMF
 #
-# if [[ $RUN_QEMU != RunGumpRun ]]
-# then
+if [[ $RUN_QEMU != RunGumpRun ]]
+then
   echo build $BUILD_ARGS && build $BUILD_ARGS
-# else
+else
   case $BUILD_ARCH in
   IA32)
     QEMU_CMD=qemu-system-i386
@@ -187,4 +187,4 @@ done
 
   QEMUx_DBGS="-debugcon file:debug.log -global isa-debugcon.iobase=0x402"
   echo "OVMF is running ..." && cd $WORKSPACE && $QEMU_CMD $QEMUx_DBGS $QEMUx_ARGS
-# fi
+fi
